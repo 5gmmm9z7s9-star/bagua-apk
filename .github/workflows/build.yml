@@ -1,4 +1,4 @@
-name: Build Pygame APK (Native)
+name: Build Kivy APK (Native)
 
 on:
   push:
@@ -22,6 +22,14 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Setup NDK r25b
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25b
+
+      - name: Accept SDK Licenses
+        run: yes | sdkmanager --licenses || true
+
       - name: Install deps & Buildozer
         run: |
           sudo apt update
@@ -32,11 +40,11 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Build APK
-        run: |
-          export APP_ANDROID_ACCEPT_SDK_LICENSE=1
-          buildozer android debug
+        run: buildozer android debug
         env:
+          APP_ANDROID_ACCEPT_SDK_LICENSE: 1
           BUILDOZER_DISABLE_PPA: "1"
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
