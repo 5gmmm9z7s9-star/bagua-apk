@@ -12,7 +12,7 @@ android.api = 31
 android.minapi = 21
 android.bootstrap = sdl2
 orientation = portrait
-fullscreen = 0
+fullscreen = 1
 android.permissions = INTERNET
 
 [buildozer]
