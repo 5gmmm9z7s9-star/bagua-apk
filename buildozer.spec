@@ -3,9 +3,10 @@ title = Bagua
 package.name = bagua
 package.domain = org.bagua
 source.dir = .
+source.main = main.py
 source.include_exts = py,png,jpg,kv,atlas
 version = 0.1
-requirements = python3==3.10.12,kivy==2.3.1,pyjnius==1.7.0,hostpython3==3.10.12
+requirements = python3,kivy,pyjnius,hostpython3
 android.arch = arm64-v8a
 android.api = 31
 android.minapi = 21
