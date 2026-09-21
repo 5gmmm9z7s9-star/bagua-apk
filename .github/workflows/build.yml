@@ -17,12 +17,6 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Accept Android SDK Licenses
-        run: |
-          yes | sdkmanager --licenses
-        env:
-          ANDROID_HOME: ${{ github.workspace }}/.buildozer/android/platform/android-sdk
-
       - name: Build with Buildozer
         uses: ArtemSBulgakov/buildozer-action@v1
         with:
@@ -30,6 +24,7 @@ jobs:
           buildozer_version: stable
         env:
           BUILDOZER_DISABLE_PPA: "1"
+          APP_ANDROID_ACCEPT_SDK_LICENSE: 1
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
