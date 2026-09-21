@@ -1,202 +1,63 @@
 # -*- coding: utf-8 -*-
 
-import pygame
+import os
 import math
 import random
-import os
+
+from kivy.app import App
+from kivy.clock import Clock
+from kivy.core.text import LabelBase
+from kivy.uix.widget import Widget
+from kivy.graphics import Color, Ellipse, Line, Rectangle
+from kivy.graphics.instructions import InstructionGroup
+from kivy.core.window import Window
+from kivy import platform
 
 
 # ============================================================
-# 全局变量
-# ============================================================
-
-WIDTH = 0
-HEIGHT = 0
-CENTER_X = 0
-CENTER_Y = 0
-SHORT = 0
-
-screen = None
-clock = None
-
-rotation_angle = 0.0
-rotation_speed = 0.0
-pressing_center = False
-
-# 双指
-active_fingers = {}
-
-# 太极解体动画
-DECOMP_IDLE = 0
-DECOMP_EXPAND = 1
-DECOMP_MERGE = 2
-
-decomp_state = DECOMP_IDLE
-decomp_progress = 0.0
-decomp_time = 0.0
-decomp_particles = []
-
-DECOMP_DURATION = 1.05
-
-
-# ============================================================
-# 旋转参数
+# 配置
 # ============================================================
 
 ACCELERATION = 0.018
 FRICTION = 0.985
 MAX_SPEED = 1.8
 
+DECOMP_DURATION = 1.05
+
+DECOMP_IDLE = 0
+DECOMP_EXPAND = 1
+DECOMP_MERGE = 2
+
 
 # ============================================================
 # 颜色
 # ============================================================
 
-BLACK = (3, 3, 7)
-WHITE = (245, 245, 245)
-GRAY = (110, 110, 120)
+BLACK = (3 / 255, 3 / 255, 7 / 255, 1)
+WHITE = (245 / 255, 245 / 255, 245 / 255, 1)
+GRAY = (110 / 255, 110 / 255, 120 / 255, 1)
 
-GOLD = (220, 180, 70)
-GOLD2 = (145, 110, 35)
+GOLD = (220 / 255, 180 / 255, 70 / 255, 1)
+GOLD2 = (145 / 255, 110 / 255, 35 / 255, 1)
 
-# 解体彩色能量
-ORANGE = (255, 145, 45)
-BLUE = (55, 175, 255)
-PURPLE = (175, 80, 255)
-CYAN = (80, 225, 255)
+ORANGE = (255 / 255, 145 / 255, 45 / 255, 1)
+BLUE = (55 / 255, 175 / 255, 255 / 255, 1)
+PURPLE = (175 / 255, 80 / 255, 255 / 255, 1)
+CYAN = (80 / 255, 225 / 255, 255 / 255, 1)
 
 
 # ============================================================
 # 字体
 # ============================================================
 
-CHINESE_FONT_PATH = None
-
-FONT_SMALL = None
-FONT_MEDIUM = None
-FONT_BIG = None
+FONT_NAME = None
 
 
-# ============================================================
-# 星空和粒子
-# ============================================================
+def register_chinese_font():
+    """探测并注册一个能显示中文的字体。"""
+    global FONT_NAME
 
-stars = []
-
-particle_ring_1 = []
-particle_ring_2 = []
-
-
-# ============================================================
-# 文字缓存
-# ============================================================
-
-tiangan_surfaces = []
-dizhi_surfaces = []
-trigram_name_surfaces = []
-
-
-# ============================================================
-# 八卦
-# ============================================================
-
-TRIGRAMS = [
-    [1, 1, 1],  # 乾
-    [1, 1, 0],  # 兑
-    [1, 0, 1],  # 离
-    [1, 0, 0],  # 震
-    [0, 1, 1],  # 巽
-    [0, 1, 0],  # 坎
-    [0, 0, 1],  # 艮
-    [0, 0, 0],  # 坤
-]
-
-TRIGRAM_NAMES = [
-    "乾",
-    "兑",
-    "离",
-    "震",
-    "巽",
-    "坎",
-    "艮",
-    "坤"
-]
-
-
-# ============================================================
-# 天干
-# ============================================================
-
-TIANGAN = [
-    "甲", "乙", "丙", "丁", "戊",
-    "己", "庚", "辛", "壬", "癸"
-]
-
-
-# ============================================================
-# 地支
-# ============================================================
-
-DIZHI = [
-    "子", "丑", "寅", "卯",
-    "辰", "巳", "午", "未",
-    "申", "酉", "戌", "亥"
-]
-
-
-# ============================================================
-# 初始化 Pygame
-# ============================================================
-
-def init_game():
-
-    global WIDTH
-    global HEIGHT
-    global CENTER_X
-    global CENTER_Y
-    global SHORT
-    global screen
-    global clock
-
-    pygame.init()
-    pygame.font.init()
-
-    try:
-        pygame.mixer.quit()
-    except:
-        pass
-
-    screen = pygame.display.set_mode(
-        (0, 0),
-        pygame.FULLSCREEN
-    )
-
-    WIDTH, HEIGHT = screen.get_size()
-
-    CENTER_X = WIDTH // 2
-    CENTER_Y = HEIGHT // 2
-
-    SHORT = min(
-        WIDTH,
-        HEIGHT
-    )
-
-    pygame.display.set_caption(
-        "动态八卦罗盘"
-    )
-
-    clock = pygame.time.Clock()
-
-
-# ============================================================
-# 查找中文字体
-# ============================================================
-
-def find_chinese_font():
-
-    global CHINESE_FONT_PATH
-
-    paths = [
+    candidates = [
         "/system/fonts/NotoSansCJK-Regular.ttc",
         "/system/fonts/NotoSansCJK-Regular.otf",
         "/system/fonts/NotoSansSC-Regular.otf",
@@ -204,2013 +65,717 @@ def find_chinese_font():
         "/system/fonts/DroidSansFallback.ttf",
         "/system/fonts/NotoSerifCJK-Regular.ttc",
         "/system/fonts/NotoSansCJKSC-Regular.otf",
-
-        "/sdcard/Download/NotoSansCJK-Regular.ttc",
-        "/sdcard/Download/NotoSansSC-Regular.ttf"
     ]
 
-    for path in paths:
-
+    for path in candidates:
         if os.path.exists(path):
+            try:
+                LabelBase.register(
+                    name="CJKMix",
+                    fn_regular=path,
+                )
+                FONT_NAME = "CJKMix"
+                return
+            except Exception:
+                pass
 
-            CHINESE_FONT_PATH = path
+    FONT_NAME = None
 
+
+def get_font_name():
+    return FONT_NAME or "Sans"
+
+
+# ============================================================
+# 八卦 / 天干 / 地支
+# ============================================================
+
+TRIGRAMS = [
+    [1, 1, 1],
+    [1, 1, 0],
+    [1, 0, 1],
+    [1, 0, 0],
+    [0, 1, 1],
+    [0, 1, 0],
+    [0, 0, 1],
+    [0, 0, 0],
+]
+
+TRIGRAM_NAMES = ["乾", "兑", "离", "震", "巽", "坎", "艮", "坤"]
+
+TIANGAN = ["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"]
+
+DIZHI = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"]
+
+
+# ============================================================
+# 主控件
+# ============================================================
+
+class BaguaWidget(Widget):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self.rotation_angle = 0.0
+        self.rotation_speed = 0.0
+        self.pressing_center = False
+
+        self.decomp_state = DECOMP_IDLE
+        self.decomp_progress = 0.0
+        self.decomp_time = 0.0
+        self.decomp_particles = []
+
+        self.stars = []
+        self.particle_ring_1 = []
+        self.particle_ring_2 = []
+
+        self.tiangan_surfaces = []
+        self.dizhi_surfaces = []
+        self.trigram_name_surfaces = []
+
+        self.font_small = None
+        self.font_medium = None
+        self.font_big = None
+
+        self.canvas_group = InstructionGroup()
+
+        self._fingers = {}          # 触控点
+        self._last_drag_angle = None
+
+        Clock.schedule_once(self._delayed_setup, 0)
+        Clock.schedule_interval(self._tick, 1 / 60.0)
+
+    # ------------------------------------------------------------
+    # 初始化
+    # ------------------------------------------------------------
+
+    def _delayed_setup(self, dt):
+        register_chinese_font()
+        self._build_fonts()
+        self._build_text_cache()
+        self._build_stars()
+        self._build_particle_rings()
+
+    def _build_fonts(self):
+        fn = get_font_name()
+        base = min(self.width, self.height)
+
+        self.font_small = fn
+        self.font_medium = fn
+        self.font_big = fn
+
+        self._font_size_small = max(16, int(base / 45))
+        self._font_size_medium = max(20, int(base / 32))
+        self._font_size_big = max(28, int(base / 20))
+
+    def _text(self, text, size, color):
+        """用当前可用字体生成文字纹理（返回 Rectangle 指令）。"""
+        from kivy.graphics.texture import Texture
+        from kivy.core.text import Label as CoreLabel
+
+        fn = get_font_name()
+        label = CoreLabel(
+            text=text,
+            font_name=fn or "Sans",
+            font_size=size,
+            color=color,
+        )
+        label.refresh()
+        texture = label.texture
+
+        rect = Rectangle(
+            texture=texture,
+            size=texture.size,
+            pos=(0, 0),
+        )
+        return rect
+
+    def _build_text_cache(self):
+        for text in TIANGAN:
+            self.tiangan_surfaces.append(
+                self._text(text, self._font_size_small, (1, 1, 1, 1))
+            )
+        for text in DIZHI:
+            self.dizhi_surfaces.append(
+                self._text(text, self._font_size_small, (200 / 255, 200 / 255, 210 / 255, 1))
+            )
+        for text in TRIGRAM_NAMES:
+            self.trigram_name_surfaces.append(
+                self._text(text, self._font_size_small, (GOLD[0], GOLD[1], GOLD[2], 1))
+            )
+
+    def _build_stars(self):
+        w, h = self.width, self.height
+        count = int(w * h / 9000)
+        count = max(120, min(count, 280))
+        for _ in range(count):
+            x = random.randint(0, int(w))
+            y = random.randint(0, int(h))
+            radius = random.choice([1, 1, 1, 1, 2])
+            brightness = random.randint(70, 180) / 255.0
+            self.stars.append((x, y, radius, brightness))
+
+    def _build_particle_rings(self):
+        for i in range(60):
+            self.particle_ring_1.append(
+                ((360.0 / 60) * i, random.choice([1, 1, 1, 2]))
+            )
+        for i in range(42):
+            self.particle_ring_2.append(
+                ((360.0 / 42) * i, random.choice([1, 1, 2]))
+            )
+
+    # ------------------------------------------------------------
+    # 工具
+    # ------------------------------------------------------------
+
+    def _short(self):
+        return min(self.width, self.height)
+
+    def _polar(self, radius, angle):
+        rad = math.radians(angle)
+        return (
+            self.center_x + math.cos(rad) * radius,
+            self.center_y + math.sin(rad) * radius,
+        )
+
+    # ------------------------------------------------------------
+    # 主循环
+    # ------------------------------------------------------------
+
+    def _tick(self, dt):
+        self._update_rotation()
+        self._update_decomposition(dt)
+        self._redraw()
+
+    def _update_rotation(self):
+        if self.pressing_center:
+            self.rotation_speed += ACCELERATION
+            if self.rotation_speed > MAX_SPEED:
+                self.rotation_speed = MAX_SPEED
+        else:
+            self.rotation_speed *= FRICTION
+            if abs(self.rotation_speed) < 0.002:
+                self.rotation_speed = 0.0
+
+        self.rotation_angle += self.rotation_speed
+
+    # ------------------------------------------------------------
+    # 解体动画
+    # ------------------------------------------------------------
+
+    def start_decomposition(self):
+        if self.decomp_state != DECOMP_IDLE:
             return
-
-
-# ============================================================
-# 获取字体
-# ============================================================
-
-def get_font(size):
-
-    try:
-
-        if CHINESE_FONT_PATH:
-
-            return pygame.font.Font(
-                CHINESE_FONT_PATH,
-                size
-            )
-
-    except Exception:
-        pass
-
-    try:
-
-        return pygame.font.SysFont(
-            "sans",
-            size
-        )
-
-    except Exception:
-
-        return pygame.font.Font(
-            None,
-            size
-        )
-
-
-# ============================================================
-# 初始化字体
-# ============================================================
-
-def init_fonts():
-
-    global FONT_SMALL
-    global FONT_MEDIUM
-    global FONT_BIG
-
-    FONT_SMALL = get_font(
-        max(
-            16,
-            SHORT // 45
-        )
-    )
-
-    FONT_MEDIUM = get_font(
-        max(
-            20,
-            SHORT // 32
-        )
-    )
-
-    FONT_BIG = get_font(
-        max(
-            28,
-            SHORT // 20
-        )
-    )
-
-
-# ============================================================
-# 创建文字缓存
-# ============================================================
-
-def create_text_cache():
-
-    global tiangan_surfaces
-    global dizhi_surfaces
-    global trigram_name_surfaces
-
-    tiangan_surfaces = []
-    dizhi_surfaces = []
-    trigram_name_surfaces = []
-
-    for text in TIANGAN:
-
-        surf = FONT_SMALL.render(
-            text,
-            True,
-            WHITE
-        )
-
-        tiangan_surfaces.append(
-            surf
-        )
-
-    for text in DIZHI:
-
-        surf = FONT_SMALL.render(
-            text,
-            True,
-            (200, 200, 210)
-        )
-
-        dizhi_surfaces.append(
-            surf
-        )
-
-    for text in TRIGRAM_NAMES:
-
-        surf = FONT_SMALL.render(
-            text,
-            True,
-            GOLD
-        )
-
-        trigram_name_surfaces.append(
-            surf
-        )
-
-
-# ============================================================
-# 创建星空
-# ============================================================
-
-def create_stars():
-
-    global stars
-
-    stars = []
-
-    count = int(
-        WIDTH * HEIGHT / 9000
-    )
-
-    if count < 120:
-        count = 120
-
-    if count > 280:
-        count = 280
-
-    for i in range(count):
-
-        x = random.randint(
-            0,
-            WIDTH
-        )
-
-        y = random.randint(
-            0,
-            HEIGHT
-        )
-
-        radius = random.choice(
-            [1, 1, 1, 1, 2]
-        )
-
-        brightness = random.randint(
-            70,
-            180
-        )
-
-        stars.append(
-            (
-                x,
-                y,
-                radius,
-                brightness
-            )
-        )
-
-
-# ============================================================
-# 创建粒子环
-# ============================================================
-
-def create_particle_rings():
-
-    global particle_ring_1
-    global particle_ring_2
-
-    particle_ring_1 = []
-    particle_ring_2 = []
-
-    for i in range(60):
-
-        angle = (
-            360.0 / 60
-        ) * i
-
-        size = random.choice(
-            [1, 1, 1, 2]
-        )
-
-        particle_ring_1.append(
-            (angle, size)
-        )
-
-    for i in range(42):
-
-        angle = (
-            360.0 / 42
-        ) * i
-
-        size = random.choice(
-            [1, 1, 2]
-        )
-
-        particle_ring_2.append(
-            (angle, size)
-        )
-
-
-# ============================================================
-# 星空背景
-# ============================================================
-
-def draw_background():
-
-    screen.fill(
-        BLACK
-    )
-
-    for x, y, radius, brightness in stars:
-
-        color = (
-            brightness,
-            brightness,
-            brightness
-        )
-
-        pygame.draw.circle(
-            screen,
-            color,
-            (x, y),
-            radius
-        )
-
-
-# ============================================================
-# 极坐标
-# ============================================================
-
-def polar_point(
-    radius,
-    angle
-):
-
-    rad = math.radians(
-        angle
-    )
-
-    x = (
-        CENTER_X
-        + math.cos(rad) * radius
-    )
-
-    y = (
-        CENTER_Y
-        + math.sin(rad) * radius
-    )
-
-    return (
-        int(x),
-        int(y)
-    )
-
-
-# ============================================================
-# 圆环
-# ============================================================
-
-def draw_ring(
-    radius,
-    width=1,
-    color=GOLD2
-):
-
-    pygame.draw.circle(
-        screen,
-        color,
-        (
-            CENTER_X,
-            CENTER_Y
-        ),
-        int(radius),
-        width
-    )
-
-
-# ============================================================
-# 刻度环
-# ============================================================
-
-def draw_scale_ring(
-    radius,
-    count,
-    angle
-):
-
-    for i in range(count):
-
-        a = (
-            angle
-            + 360.0 / count * i
-        )
-
-        inner = radius - 8
-        outer = radius + 8
-
-        p1 = polar_point(
-            inner,
-            a
-        )
-
-        p2 = polar_point(
-            outer,
-            a
-        )
-
-        width = 1
-
-        if i % 5 == 0:
-            width = 2
-
-        pygame.draw.line(
-            screen,
-            (120, 105, 70),
-            p1,
-            p2,
-            width
-        )
-
-
-# ============================================================
-# 粒子
-# ============================================================
-
-def draw_particles(
-    radius,
-    particles,
-    angle,
-    direction=1
-):
-
-    for base_angle, size in particles:
-
-        a = (
-            base_angle
-            + angle * direction
-        )
-
-        x, y = polar_point(
-            radius,
-            a
-        )
-
-        pygame.draw.circle(
-            screen,
-            (200, 170, 90),
-            (x, y),
-            size
-        )
-
-
-# ============================================================
-# 阳爻
-# ============================================================
-
-def draw_yang_line(
-    x,
-    y,
-    length,
-    width
-):
-
-    pygame.draw.line(
-        screen,
-        WHITE,
-        (
-            x - length // 2,
-            y
-        ),
-        (
-            x + length // 2,
-            y
-        ),
-        width
-    )
-
-
-# ============================================================
-# 阴爻
-# ============================================================
-
-def draw_yin_line(
-    x,
-    y,
-    length,
-    width
-):
-
-    gap = max(
-        5,
-        length // 7
-    )
-
-    pygame.draw.line(
-        screen,
-        WHITE,
-        (
-            x - length // 2,
-            y
-        ),
-        (
-            x - gap // 2,
-            y
-        ),
-        width
-    )
-
-    pygame.draw.line(
-        screen,
-        WHITE,
-        (
-            x + gap // 2,
-            y
-        ),
-        (
-            x + length // 2,
-            y
-        ),
-        width
-    )
-
-
-# ============================================================
-# 单个八卦
-# ============================================================
-
-def draw_single_trigram(
-    cx,
-    cy,
-    angle,
-    trigram
-):
-
-    length = int(
-        SHORT * 0.045
-    )
-
-    width = max(
-        2,
-        int(SHORT * 0.006)
-    )
-
-    gap = int(
-        SHORT * 0.018
-    )
-
-    rad = math.radians(
-        angle
-    )
-
-    for index, value in enumerate(
-        trigram
-    ):
-
-        local_y = (
-            index - 1
-        ) * gap
-
-        dx = (
-            -math.sin(rad)
-            * local_y
-        )
-
-        dy = (
-            math.cos(rad)
-            * local_y
-        )
-
-        x = int(
-            cx + dx
-        )
-
-        y = int(
-            cy + dy
-        )
-
-        if value == 1:
-
-            draw_yang_line(
-                x,
-                y,
-                length,
-                width
-            )
-
-        else:
-
-            draw_yin_line(
-                x,
-                y,
-                length,
-                width
-            )
-
-
-# ============================================================
-# 八卦环
-# ============================================================
-
-def draw_trigrams(
-    radius,
-    angle
-):
-
-    count = 8
-
-    small_radius = int(
-        SHORT * 0.026
-    )
-
-    for i in range(count):
-
-        a = (
-            angle
-            + 360.0 / count * i
-        )
-
-        x, y = polar_point(
-            radius,
-            a
-        )
-
-        pygame.draw.circle(
-            screen,
-            (10, 10, 16),
-            (x, y),
-            small_radius + 15
-        )
-
-        pygame.draw.circle(
-            screen,
-            GOLD2,
-            (x, y),
-            small_radius + 15,
-            1
-        )
-
-        draw_single_trigram(
-            x,
-            y,
-            a + 90,
-            TRIGRAMS[i]
-        )
-
-        text = trigram_name_surfaces[i]
-
-        rect = text.get_rect(
-            center=(
-                x,
-                y + small_radius + 28
-            )
-        )
-
-        screen.blit(
-            text,
-            rect
-        )
-
-
-# ============================================================
-# 天干
-# ============================================================
-
-def draw_tiangan(
-    radius,
-    angle
-):
-
-    count = len(
-        TIANGAN
-    )
-
-    for i in range(count):
-
-        a = (
-            angle
-            + 360.0 / count * i
-        )
-
-        x, y = polar_point(
-            radius,
-            a
-        )
-
-        text = tiangan_surfaces[i]
-
-        rect = text.get_rect(
-            center=(x, y)
-        )
-
-        screen.blit(
-            text,
-            rect
-        )
-
-
-# ============================================================
-# 地支
-# ============================================================
-
-def draw_dizhi(
-    radius,
-    angle
-):
-
-    count = len(
-        DIZHI
-    )
-
-    for i in range(count):
-
-        a = (
-            angle
-            - 360.0 / count * i
-        )
-
-        x, y = polar_point(
-            radius,
-            a
-        )
-
-        text = dizhi_surfaces[i]
-
-        rect = text.get_rect(
-            center=(x, y)
-        )
-
-        screen.blit(
-            text,
-            rect
-        )
-
-
-# ============================================================
-# 连接线
-# ============================================================
-
-def draw_connection_lines(
-    radius,
-    angle
-):
-
-    count = 12
-
-    for i in range(count):
-
-        a = (
-            angle
-            + i * 30
-        )
-
-        p1 = polar_point(
-            radius - 22,
-            a
-        )
-
-        p2 = polar_point(
-            radius + 22,
-            a
-        )
-
-        pygame.draw.line(
-            screen,
-            (70, 70, 80),
-            p1,
-            p2,
-            1
-        )
-
-
-# ============================================================
-# 椭圆轨道
-# ============================================================
-
-def draw_orbit(
-    radius,
-    angle
-):
-
-    points = []
-
-    for i in range(37):
-
-        t = (
-            2 * math.pi
-            * i / 36
-        )
-
-        x = (
-            math.cos(t)
-            * radius
-        )
-
-        y = (
-            math.sin(t)
-            * radius
-            * 0.42
-        )
-
-        rad = math.radians(
-            angle
-        )
-
-        rx = (
-            x * math.cos(rad)
-            - y * math.sin(rad)
-        )
-
-        ry = (
-            x * math.sin(rad)
-            + y * math.cos(rad)
-        )
-
-        points.append(
-            (
-                int(CENTER_X + rx),
-                int(CENTER_Y + ry)
-            )
-        )
-
-    pygame.draw.lines(
-        screen,
-        (90, 90, 100),
-        False,
-        points,
-        1
-    )
-
-
-# ============================================================
-# 判断某一点位于太极黑半还是白半
-# ============================================================
-
-def taiji_color_at(
-    px,
-    py,
-    radius
-):
-
-    dx = px - CENTER_X
-    dy = py - CENTER_Y
-
-    if dx * dx + dy * dy > radius * radius:
-        return None
-
-    # 下方白色圆
-    lower_dx = dx
-    lower_dy = dy - radius // 2
-
-    if (
-        lower_dx * lower_dx
-        + lower_dy * lower_dy
-        <= (radius // 2) ** 2
-    ):
-        return "white"
-
-    # 上方黑色圆
-    upper_dx = dx
-    upper_dy = dy + radius // 2
-
-    if (
-        upper_dx * upper_dx
-        + upper_dy * upper_dy
-        <= (radius // 2) ** 2
-    ):
-        return "black"
-
-    # 主体左右区域
-    if dx < 0:
-        return "white"
-
-    return "black"
-
-
-# ============================================================
-# 创建解体粒子
-# ============================================================
-
-def create_decomposition_particles():
-
-    global decomp_particles
-
-    decomp_particles = []
-
-    radius = int(
-        SHORT * 0.15
-    )
-
-    # 大量细小粒子
-    for i in range(260):
-
-        angle = random.uniform(
-            0,
-            math.pi * 2
-        )
-
-        distance = (
-            random.random() ** 0.65
-            * radius
-        )
-
-        x = math.cos(angle) * distance
-        y = math.sin(angle) * distance
-
-        # 一部分粒子集中在中心
-        if random.random() < 0.35:
-
-            x *= 0.55
-            y *= 0.55
-
-        if i % 3 == 0:
-            color = ORANGE
-        elif i % 3 == 1:
-            color = BLUE
-        else:
-            color = PURPLE
-
-        decomp_particles.append(
-            [
-                x,
-                y,
+        self._create_decomposition_particles()
+        self.decomp_state = DECOMP_EXPAND
+        self.decomp_progress = 0.0
+        self.decomp_time = 0.0
+
+    def _create_decomposition_particles(self):
+        self.decomp_particles = []
+        radius = self._short() * 0.15
+        for i in range(260):
+            angle = random.uniform(0, math.pi * 2)
+            distance = (random.random() ** 0.65) * radius
+            x = math.cos(angle) * distance
+            y = math.sin(angle) * distance
+            if random.random() < 0.35:
+                x *= 0.55
+                y *= 0.55
+            if i % 3 == 0:
+                color = ORANGE
+            elif i % 3 == 1:
+                color = BLUE
+            else:
+                color = PURPLE
+            self.decomp_particles.append([
+                x, y,
                 random.uniform(0.7, 2.4),
                 random.uniform(0.7, 1.5),
                 random.uniform(-1.2, 1.2),
-                color
-            ]
-        )
-
-
-# ============================================================
-# 开始解体
-# ============================================================
-
-def start_decomposition():
-
-    global decomp_state
-    global decomp_progress
-    global decomp_time
-
-    # 正在播放时不重复触发
-    if decomp_state != DECOMP_IDLE:
-        return
-
-    create_decomposition_particles()
-
-    decomp_state = DECOMP_EXPAND
-    decomp_progress = 0.0
-    decomp_time = 0.0
-
-
-# ============================================================
-# 更新解体
-# ============================================================
-
-def update_decomposition(dt):
-
-    global decomp_state
-    global decomp_progress
-    global decomp_time
-
-    if decomp_state == DECOMP_IDLE:
-        return
-
-    decomp_time += dt
-
-    p = decomp_time / DECOMP_DURATION
-
-    if p > 1.0:
-        p = 1.0
-
-    if decomp_state == DECOMP_EXPAND:
-
-        decomp_progress = p
-
-        if p >= 1.0:
-
-            decomp_state = DECOMP_MERGE
-            decomp_time = 0.0
-
-    elif decomp_state == DECOMP_MERGE:
-
-        decomp_progress = 1.0 - p
-
-        if p >= 1.0:
-
-            decomp_progress = 0.0
-            decomp_state = DECOMP_IDLE
-
-
-# ============================================================
-# 缓动
-# ============================================================
-
-def ease_out(t):
-
-    return 1.0 - (1.0 - t) ** 3
-
-
-def ease_in(t):
-
-    return t ** 3
-
-
-# ============================================================
-# 太极细线背景
-# ============================================================
-
-def draw_taiji_detail_lines(
-    radius
-):
-
-    # 中心增加大量非常细的轨迹线
-    # 让中心不会显得空
-
-    for i in range(48):
-
-        angle = (
-            i * 7.5
-            + rotation_angle * 0.35
-        )
-
-        inner = radius * 0.70
-        outer = radius * 1.12
-
-        p1 = polar_point(
-            inner,
-            angle
-        )
-
-        p2 = polar_point(
-            outer,
-            angle + 1.5
-        )
-
-        if i % 2 == 0:
-            color = (70, 60, 35)
-        else:
-            color = (45, 55, 65)
-
-        pygame.draw.line(
-            screen,
-            color,
-            p1,
-            p2,
-            1
-        )
-
-
-# ============================================================
-# 绘制解体状态
-# ============================================================
-
-def draw_decomposition(
-    radius
-):
-
-    p = decomp_progress
-
-    if decomp_state == DECOMP_EXPAND:
-
-        progress = ease_out(p)
-
-    else:
-
-        progress = ease_in(p)
-
-    r = float(radius)
-
-    # --------------------------------------------------------
-    # 中心大量细线
-    # --------------------------------------------------------
-
-    for i in range(100):
-
-        angle = (
-            i * 3.6
-            + rotation_angle
-        )
-
-        # 解体后线越来越长
-        inner = r * (
-            0.08
-            + progress * 0.20
-        )
-
-        outer = r * (
-            0.55
-            + progress * 3.4
-        )
-
-        x1, y1 = polar_point(
-            inner,
-            angle
-        )
-
-        x2, y2 = polar_point(
-            outer,
-            angle + math.sin(i) * 3
-        )
-
-        if i % 3 == 0:
-            color = ORANGE
-        elif i % 3 == 1:
-            color = BLUE
-        else:
-            color = PURPLE
-
-        pygame.draw.line(
-            screen,
-            color,
-            (x1, y1),
-            (x2, y2),
-            1
-        )
-
-    # --------------------------------------------------------
-    # 密集同心能量环
-    # --------------------------------------------------------
-
-    for i in range(16):
-
-        rr = (
-            r * 0.25
-            + progress
-            * r
-            * (0.25 + i * 0.20)
-        )
-
-        if i % 2 == 0:
-
-            color = (
-                140,
-                75,
-                35
-            )
-
-        else:
-
-            color = (
-                40,
-                90,
-                150
-            )
-
-        pygame.draw.circle(
-            screen,
-            color,
-            (
-                CENTER_X,
-                CENTER_Y
-            ),
-            max(1, int(rr)),
-            1
-        )
-
-    # --------------------------------------------------------
-    # 黑白两半的彩色能量
-    # --------------------------------------------------------
-
-    energy_distance = (
-        r * 0.18
-        + progress * r * 1.8
-    )
-
-    # 橙色能量
-    ox, oy = polar_point(
-        energy_distance,
-        145 + rotation_angle
-    )
-
-    pygame.draw.circle(
-        screen,
-        ORANGE,
-        (ox, oy),
-        max(
-            3,
-            int(r * 0.18 * (1.0 - progress * 0.45))
-        ),
-        2
-    )
-
-    # 蓝紫能量
-    bx, by = polar_point(
-        energy_distance,
-        325 - rotation_angle
-    )
-
-    pygame.draw.circle(
-        screen,
-        BLUE,
-        (bx, by),
-        max(
-            3,
-            int(r * 0.18 * (1.0 - progress * 0.45))
-        ),
-        2
-    )
-
-    # --------------------------------------------------------
-    # 粒子向外飞，再向中心回来
-    # --------------------------------------------------------
-
-    for particle in decomp_particles:
-
-        x = particle[0]
-        y = particle[1]
-        size = particle[2]
-        stretch = particle[3]
-        spin = particle[4]
-        color = particle[5]
-
-        base_angle = math.atan2(
-            y,
-            x
-        )
-
-        distance = math.sqrt(
-            x * x
-            + y * y
-        )
-
-        # 解体时向外放大
-        final_distance = (
-            distance
-            * (
-                1.0
-                + progress * 3.5
-            )
-        )
-
-        angle = (
-            base_angle
-            + spin * progress
-        )
-
-        px = (
-            CENTER_X
-            + math.cos(angle)
-            * final_distance
-        )
-
-        py = (
-            CENTER_Y
-            + math.sin(angle)
-            * final_distance
-        )
-
-        px = int(px)
-        py = int(py)
-
-        particle_size = max(
-            1,
-            int(
-                size
-                * (
-                    1.0
-                    + progress * 1.6
-                )
-            )
-        )
-
-        pygame.draw.circle(
-            screen,
-            color,
-            (px, py),
-            particle_size
-        )
-
-        # 粒子拖尾
-        if particle_size >= 2:
-
-            tail_length = (
-                particle_size
-                * 5
-                * (0.5 + progress)
-            )
-
-            tx = int(
-                px
-                - math.cos(angle)
-                * tail_length
-            )
-
-            ty = int(
-                py
-                - math.sin(angle)
-                * tail_length
-            )
-
-            pygame.draw.line(
-                screen,
                 color,
-                (tx, ty),
-                (px, py),
-                1
+            ])
+
+    def _update_decomposition(self, dt):
+        if self.decomp_state == DECOMP_IDLE:
+            return
+
+        self.decomp_time += dt
+        p = self.decomp_time / DECOMP_DURATION
+        if p > 1.0:
+            p = 1.0
+
+        if self.decomp_state == DECOMP_EXPAND:
+            self.decomp_progress = p
+            if p >= 1.0:
+                self.decomp_state = DECOMP_MERGE
+                self.decomp_time = 0.0
+        elif self.decomp_state == DECOMP_MERGE:
+            self.decomp_progress = 1.0 - p
+            if p >= 1.0:
+                self.decomp_progress = 0.0
+                self.decomp_state = DECOMP_IDLE
+
+    # ============================================================
+    # 绘制
+    # ============================================================
+
+    def _redraw(self):
+        self.canvas.clear()
+
+        with self.canvas:
+            self._draw_background()
+            self._draw_disc_backdrop()
+            self._draw_tiangan(self._short() * 0.30, self.rotation_angle * 0.5)
+            self._draw_dizhi(self._short() * 0.40, -self.rotation_angle * 0.4)
+            self._draw_connection_lines(self._short() * 0.25, self.rotation_angle)
+            self._draw_scale_ring(self._short() * 0.22, 24, -self.rotation_angle * 0.6)
+            self._draw_trigrams(self._short() * 0.17, self.rotation_angle)
+            self._draw_particles(self._short() * 0.20, self.particle_ring_1,
+                                 self.rotation_angle * 0.8, 1)
+            self._draw_particles(self._short() * 0.205, self.particle_ring_2,
+                                 -self.rotation_angle * 0.6, -1)
+            self._draw_center_glow(self._short() * 0.155)
+            self._draw_taiji(self._short() * 0.155)
+
+    # ------------------------------------------------------------
+    # 背景
+    # ------------------------------------------------------------
+
+    def _draw_background(self):
+        Color(*BLACK)
+        Rectangle(pos=(0, 0), size=self.size)
+        for x, y, radius, brightness in self.stars:
+            Color(brightness, brightness, brightness, 1)
+            Ellipse(pos=(x - radius, y - radius), size=(radius * 2, radius * 2))
+
+    # ------------------------------------------------------------
+    # 罗盘底盘
+    # ------------------------------------------------------------
+
+    def _draw_disc_backdrop(self):
+        r = self._short() * 0.43
+        Color(*GOLD2)
+        Ellipse(
+            pos=(self.center_x - r - 6, self.center_y - r - 6),
+            size=(r * 2 + 12, r * 2 + 12),
+        )
+        Color(8 / 255, 8 / 255, 14 / 255, 1)
+        Ellipse(
+            pos=(self.center_x - r, self.center_y - r),
+            size=(r * 2, r * 2),
+        )
+        Color(70 / 255, 70 / 255, 80 / 255, 1)
+        Line(circle=(self.center_x, self.center_y, r - 2), width=1)
+
+    # ------------------------------------------------------------
+    # 圆环
+    # ------------------------------------------------------------
+
+    def _draw_ring(self, radius, width=1, color=GOLD2):
+        Color(*color)
+        Line(circle=(self.center_x, self.center_y, radius), width=width)
+
+    def _draw_scale_ring(self, radius, count, angle):
+        for i in range(count):
+            a = angle + 360.0 / count * i
+            p1 = self._polar(radius - 8, a)
+            p2 = self._polar(radius + 8, a)
+            w = 2 if i % 5 == 0 else 1
+            Color(120 / 255, 105 / 255, 70 / 255, 1)
+            Line(points=[p1[0], p1[1], p2[0], p2[1]], width=w)
+
+    def _draw_connection_lines(self, radius, angle):
+        for i in range(12):
+            a = angle + i * 30
+            p1 = self._polar(radius - 22, a)
+            p2 = self._polar(radius + 22, a)
+            Color(70 / 255, 70 / 255, 80 / 255, 1)
+            Line(points=[p1[0], p1[1], p2[0], p2[1]], width=1)
+
+    def _draw_particles(self, radius, particles, angle, direction=1):
+        for base_angle, size in particles:
+            a = base_angle + angle * direction
+            x, y = self._polar(radius, a)
+            Color(200 / 255, 170 / 255, 90 / 255, 1)
+            Ellipse(pos=(x - size, y - size), size=(size * 2, size * 2))
+
+    # ------------------------------------------------------------
+    # 卦象
+    # ------------------------------------------------------------
+
+    def _draw_single_trigram(self, cx, cy, angle, trigram):
+        length = int(self._short() * 0.045)
+        width = max(2, int(self._short() * 0.006))
+        gap = int(self._short() * 0.018)
+        rad = math.radians(angle)
+
+        for index, value in enumerate(trigram):
+            local_y = (index - 1) * gap
+            dx = -math.sin(rad) * local_y
+            dy = math.cos(rad) * local_y
+            x = int(cx + dx)
+            y = int(cy + dy)
+
+            if value == 1:
+                self._draw_yang_line(x, y, length, width)
+            else:
+                self._draw_yin_line(x, y, length, width)
+
+    def _draw_yang_line(self, x, y, length, width):
+        Color(*WHITE)
+        Line(points=[x - length / 2, y, x + length / 2, y], width=width)
+
+    def _draw_yin_line(self, x, y, length, width):
+        gap = max(5, length // 7)
+        Color(*WHITE)
+        Line(points=[x - length / 2, y, x - gap / 2, y], width=width)
+        Line(points=[x + gap / 2, y, x + length / 2, y], width=width)
+
+    def _draw_trigrams(self, radius, angle):
+        small_radius = int(self._short() * 0.026)
+        for i in range(8):
+            a = angle + 360.0 / 8 * i
+            x, y = self._polar(radius, a)
+            Color(10 / 255, 10 / 255, 16 / 255, 1)
+            Ellipse(
+                pos=(x - small_radius - 15, y - small_radius - 15),
+                size=(small_radius * 2 + 30, small_radius * 2 + 30),
             )
-
-    # --------------------------------------------------------
-    # 中心核心
-    # --------------------------------------------------------
-
-    core_radius = int(
-        r * (
-            0.16
-            + (1.0 - progress) * 0.18
-        )
-    )
-
-    pygame.draw.circle(
-        screen,
-        ORANGE,
-        (
-            CENTER_X,
-            CENTER_Y
-        ),
-        core_radius,
-        1
-    )
-
-    pygame.draw.circle(
-        screen,
-        BLUE,
-        (
-            CENTER_X,
-            CENTER_Y
-        ),
-        max(
-            2,
-            core_radius - 7
-        ),
-        1
-    )
-
-    # 中央白色核心
-    pygame.draw.circle(
-        screen,
-        WHITE,
-        (
-            CENTER_X,
-            CENTER_Y
-        ),
-        max(
-            2,
-            int(4 + 5 * (1.0 - progress))
-        )
-    )
-
-
-# ============================================================
-# 太极
-# ============================================================
-
-def draw_taiji(
-    radius
-):
-
-    r = int(radius)
-
-    # 解体/合成时不画普通太极
-    if decomp_state != DECOMP_IDLE:
-
-        draw_decomposition(
-            radius
-        )
-
-        return
-
-    # --------------------------------------------------------
-    # 外金色边框
-    # --------------------------------------------------------
-
-    pygame.draw.circle(
-        screen,
-        GOLD,
-        (
-            CENTER_X,
-            CENTER_Y
-        ),
-        r + 4,
-        2
-    )
-
-    # --------------------------------------------------------
-    # 黑色基础圆
-    # --------------------------------------------------------
-
-    pygame.draw.circle(
-        screen,
-        BLACK,
-        (
-            CENTER_X,
-            CENTER_Y
-        ),
-        r
-    )
-
-    # --------------------------------------------------------
-    # 白色左半圆
-    # --------------------------------------------------------
-
-    points = []
-
-    for i in range(61):
-
-        angle = math.radians(
-            90 + i * 3
-        )
-
-        x = (
-            CENTER_X
-            + math.cos(angle) * r
-        )
-
-        y = (
-            CENTER_Y
-            + math.sin(angle) * r
-        )
-
-        points.append(
-            (
-                int(x),
-                int(y)
-            )
-        )
-
-    points.append(
-        (
-            CENTER_X,
-            CENTER_Y
-        )
-    )
-
-    pygame.draw.polygon(
-        screen,
-        WHITE,
-        points
-    )
-
-    # --------------------------------------------------------
-    # 黑色上半圆
-    # --------------------------------------------------------
-
-    pygame.draw.circle(
-        screen,
-        BLACK,
-        (
-            CENTER_X,
-            CENTER_Y - r // 2
-        ),
-        r // 2
-    )
-
-    # --------------------------------------------------------
-    # 白色下半圆
-    # --------------------------------------------------------
-
-    pygame.draw.circle(
-        screen,
-        WHITE,
-        (
-            CENTER_X,
-            CENTER_Y + r // 2
-        ),
-        r // 2
-    )
-
-    # --------------------------------------------------------
-    # 两个眼睛
-    # --------------------------------------------------------
-
-    eye_r = max(
-        3,
-        r // 7
-    )
-
-    pygame.draw.circle(
-        screen,
-        WHITE,
-        (
-            CENTER_X,
-            CENTER_Y - r // 2
-        ),
-        eye_r
-    )
-
-    pygame.draw.circle(
-        screen,
-        BLACK,
-        (
-            CENTER_X,
-            CENTER_Y + r // 2
-        ),
-        eye_r
-    )
-
-    # --------------------------------------------------------
-    # 最外金色轮廓
-    # --------------------------------------------------------
-
-    pygame.draw.circle(
-        screen,
-        GOLD,
-        (
-            CENTER_X,
-            CENTER_Y
-        ),
-        r,
-        2
-    )
-
-
-# ============================================================
-# 中心光环
-# ============================================================
-
-def draw_center_glow(
-    radius
-):
-
-    if decomp_state == DECOMP_IDLE:
-
-        for i in range(3):
-
-            r = (
-                radius
-                + 8
-                + i * 8
-            )
-
-            pygame.draw.circle(
-                screen,
-                (100, 80, 35),
-                (
-                    CENTER_X,
-                    CENTER_Y
-                ),
-                r,
-                1
-            )
-
-        # 额外细线
-        draw_taiji_detail_lines(
-            radius
-        )
-
-    else:
-
-        p = decomp_progress
-
-        r = int(
-            radius
-            * (
-                1.0
-                + p * 2.8
-            )
-        )
-
-        pygame.draw.circle(
-            screen,
-            ORANGE,
-            (
-                CENTER_X,
-                CENTER_Y
-            ),
-            r,
-            1
-        )
-
-        pygame.draw.circle(
-            screen,
-            BLUE,
-            (
-                CENTER_X,
-                CENTER_Y
-            ),
-            max(
-                1,
-                r - 7
-            ),
-            1
-        )
-
-
-# ============================================================
-# 更新旋转
-# ============================================================
-
-def update_rotation():
-
-    global rotation_angle
-    global rotation_speed
-
-    if pressing_center:
-
-        rotation_speed += ACCELERATION
-
-        if rotation_speed > MAX_SPEED:
-
-            rotation_speed = MAX_SPEED
-
-    else:
-
-        rotation_speed *= FRICTION
-
-        if abs(rotation_speed) < 0.002:
-
-            rotation_speed = 0.0
-
-    rotation_angle += rotation_speed
-
-
-# ============================================================
-# 判断是否按住中心
-# ============================================================
-
-def is_center_pressed(
-    pos
-):
-
-    dx = (
-        pos[0]
-        - CENTER_X
-    )
-
-    dy = (
-        pos[1]
-        - CENTER_Y
-    )
-
-    distance = math.sqrt(
-        dx * dx
-        + dy * dy
-    )
-
-    touch_radius = int(
-        SHORT * 0.15
-    )
-
-    return distance <= touch_radius
-
-
-# ============================================================
-# 双指是否一黑一白
-# ============================================================
-
-def has_black_white_fingers():
-
-    radius = int(
-        SHORT * 0.15
-    )
-
-    colors = []
-
-    for pos in active_fingers.values():
-
-        color = taiji_color_at(
-            pos[0],
-            pos[1],
-            radius
-        )
-
-        if color is not None:
-
-            colors.append(
-                color
-            )
-
-    return (
-        "black" in colors
-        and "white" in colors
-    )
-
-
-# ============================================================
-# 事件处理
-# ============================================================
-
-def handle_events():
-
-    global pressing_center
-
-    for event in pygame.event.get():
-
-        # ----------------------------------------------------
-        # 退出
-        # ----------------------------------------------------
-
-        if event.type == pygame.QUIT:
-
-            return False
-
-        # ----------------------------------------------------
-        # 鼠标按下
-        # ----------------------------------------------------
-
-        elif event.type == pygame.MOUSEBUTTONDOWN:
-
-            if is_center_pressed(
-                event.pos
-            ):
-
-                pressing_center = True
-
-        # ----------------------------------------------------
-        # 鼠标松开
-        # ----------------------------------------------------
-
-        elif event.type == pygame.MOUSEBUTTONUP:
-
-            pressing_center = False
-
-        # ----------------------------------------------------
-        # Android 手指按下
-        # ----------------------------------------------------
-
-        elif event.type == pygame.FINGERDOWN:
-
-            x = int(
-                event.x * WIDTH
-            )
-
-            y = int(
-                event.y * HEIGHT
-            )
-
-            active_fingers[
-                event.finger_id
-            ] = (
-                x,
-                y
-            )
-
-            # 两根手指一根碰黑、一根碰白
-            if (
-                len(active_fingers) >= 2
-                and has_black_white_fingers()
-            ):
-
-                start_decomposition()
-
-            if is_center_pressed(
-                (x, y)
-            ):
-
-                pressing_center = True
-
-        # ----------------------------------------------------
-        # Android 手指移动
-        # ----------------------------------------------------
-
-        elif event.type == pygame.FINGERMOTION:
-
-            if event.finger_id in active_fingers:
-
-                x = int(
-                    event.x * WIDTH
-                )
-
-                y = int(
-                    event.y * HEIGHT
-                )
-
-                active_fingers[
-                    event.finger_id
-                ] = (
-                    x,
-                    y
-                )
-
-                # 如果移动过程中变成一黑一白，也触发
-                if (
-                    len(active_fingers) >= 2
-                    and has_black_white_fingers()
-                ):
-
-                    start_decomposition()
-
-        # ----------------------------------------------------
-        # Android 手指松开
-        # ----------------------------------------------------
-
-        elif event.type == pygame.FINGERUP:
-
-            if event.finger_id in active_fingers:
-
-                del active_fingers[
-                    event.finger_id
-                ]
-
-            pressing_center = (
-                len(active_fingers) > 0
-            )
-
-        # ----------------------------------------------------
-        # 返回键 / ESC
-        # ----------------------------------------------------
-
-        elif event.type == pygame.KEYDOWN:
-
-            if event.key == pygame.K_ESCAPE:
-
-                return False
-
-    return True
-
-
-# ============================================================
-# 速度信息
-# ============================================================
-
-def draw_speed_info():
-
-    text = FONT_SMALL.render(
-        "速度 %.2f" % abs(rotation_speed),
-        True,
-        WHITE
-    )
-
-    screen.blit(
-        text,
-        (20, 20)
-    )
-
-    if decomp_state != DECOMP_IDLE:
-
-        state = "太极解体 / 合成"
-
-    elif pressing_center:
-
-        state = "加速中"
-
-    elif rotation_speed > 0.05:
-
-        state = "惯性旋转"
-
-    else:
-
-        state = "停止"
-
-    state_text = FONT_SMALL.render(
-        state,
-        True,
-        GOLD
-    )
-
-    screen.blit(
-        state_text,
-        (
-            20,
-            20 + FONT_SMALL.get_height() + 4
-        )
-    )
-
-
-# ============================================================
-# 底部提示
-# ============================================================
-
-def draw_hint():
-
-    if decomp_state != DECOMP_IDLE:
-
-        message = (
-            "中心解体 → 向外放大 → 彩色粒子慢慢合成"
-        )
-
-    elif len(active_fingers) >= 2:
-
-        message = (
-            "双指一黑一白 · 正在触发"
-        )
-
-    elif pressing_center:
-
-        message = (
-            "按住中央太极 · 加速旋转"
-        )
-
-    elif rotation_speed > 0.05:
-
-        message = (
-            "松开 · 惯性旋转"
-        )
-
-    else:
-
-        message = (
-            "双指分别触碰黑白两半 · 触发解体"
-        )
-
-    text = FONT_MEDIUM.render(
-        message,
-        True,
-        WHITE
-    )
-
-    rect = text.get_rect(
-        center=(
-            CENTER_X,
-            HEIGHT - SHORT // 13
-        )
-    )
-
-    screen.blit(
-        text,
-        rect
-    )
-
-
-# ============================================================
-# 绘制整个场景
-# ============================================================
-
-def draw_scene():
-
-    draw_background()
-
-    r1 = int(
-        SHORT * 0.15
-    )
-
-    r2 = int(
-        SHORT * 0.22
-    )
-
-    r3 = int(
-        SHORT * 0.30
-    )
-
-    r4 = int(
-        SHORT * 0.38
-    )
-
-    r5 = int(
-        SHORT * 0.45
-    )
-
-    # 外层圆环
-    draw_ring(
-        r5,
-        1,
-        (55, 55, 65)
-    )
-
-    draw_ring(
-        r4,
-        1,
-        GOLD2
-    )
-
-    draw_ring(
-        r3,
-        1,
-        (100, 90, 65)
-    )
-
-    draw_ring(
-        r2,
-        1,
-        (70, 70, 80)
-    )
-
-    # 刻度
-    draw_scale_ring(
-        r5,
-        72,
-        rotation_angle
-    )
-
-    draw_scale_ring(
-        r4,
-        48,
-        -rotation_angle
-    )
-
-    # 粒子
-    draw_particles(
-        r5,
-        particle_ring_1,
-        rotation_angle,
-        1
-    )
-
-    draw_particles(
-        r3,
-        particle_ring_2,
-        rotation_angle,
-        -1
-    )
-
-    # 连接线
-    draw_connection_lines(
-        r4,
-        rotation_angle
-    )
-
-    # 椭圆轨道
-    draw_orbit(
-        r4,
-        rotation_angle * 0.7
-    )
-
-    draw_orbit(
-        r5,
-        -rotation_angle * 0.45
-    )
-
-    # 地支
-    draw_dizhi(
-        r5,
-        -rotation_angle * 0.75
-    )
-
-    # 天干
-    draw_tiangan(
-        r4,
-        rotation_angle
-    )
-
-    # 八卦
-    draw_trigrams(
-        r3,
-        rotation_angle
-    )
-
-    # 中心光环
-    draw_center_glow(
-        r1
-    )
-
+            Color(*GOLD2)
+            Line(circle=(x, y, small_radius + 15), width=1)
+            self._draw_single_trigram(x, y, a + 90, TRIGRAMS[i])
+
+            text = self.trigram_name_surfaces[i]
+            text.pos = (x - text.texture.size[0] / 2,
+                        y + small_radius + 28 - text.texture.size[1] / 2)
+
+    # ------------------------------------------------------------
+    # 天干 / 地支
+    # ------------------------------------------------------------
+
+    def _draw_tiangan(self, radius, angle):
+        for i, text in enumerate(self.tiangan_surfaces):
+            a = angle + 360.0 / len(TIANGAN) * i
+            x, y = self._polar(radius, a)
+            text.pos = (x - text.texture.size[0] / 2,
+                        y - text.texture.size[1] / 2)
+
+    def _draw_dizhi(self, radius, angle):
+        for i, text in enumerate(self.dizhi_surfaces):
+            a = angle - 360.0 / len(DIZHI) * i
+            x, y = self._polar(radius, a)
+            text.pos = (x - text.texture.size[0] / 2,
+                        y - text.texture.size[1] / 2)
+
+    # ------------------------------------------------------------
     # 太极
-    draw_taiji(
-        r1
-    )
+    # ------------------------------------------------------------
 
-    # UI
-    draw_speed_info()
+    def _draw_taiji(self, radius):
+        r = float(radius)
 
-    draw_hint()
+        if self.decomp_state != DECOMP_IDLE:
+            self._draw_decomposition(radius)
+            return
 
+        # 金色外框
+        Color(*GOLD)
+        Line(circle=(self.center_x, self.center_y, r + 4), width=2)
 
-# ============================================================
-# 主程序
-# ============================================================
-
-def main():
-
-    init_game()
-
-    find_chinese_font()
-
-    init_fonts()
-
-    create_text_cache()
-
-    create_stars()
-
-    create_particle_rings()
-
-    running = True
-
-    while running:
-
-        running = handle_events()
-
-        update_decomposition(
-            1.0 / 60.0
+        # 黑色底
+        Color(*BLACK)
+        Ellipse(
+            pos=(self.center_x - r, self.center_y - r),
+            size=(r * 2, r * 2),
         )
 
-        update_rotation()
+        # 白左半圆（用扇形多边形）
+        points = []
+        for i in range(61):
+            angle = math.radians(90 + i * 3)
+            points.append((
+                self.center_x + math.cos(angle) * r,
+                self.center_y + math.sin(angle) * r,
+            ))
+        points.append((self.center_x, self.center_y))
+        Color(*WHITE)
+        self._poly(points)
 
-        draw_scene()
+        # 黑白鱼
+        Color(*BLACK)
+        Ellipse(
+            pos=(self.center_x - r / 2, self.center_y - r / 2 - r / 2),
+            size=(r, r),
+        )
+        Color(*WHITE)
+        Ellipse(
+            pos=(self.center_x - r / 2, self.center_y - r / 2 + r / 2),
+            size=(r, r),
+        )
 
-        pygame.display.flip()
+        # 鱼眼
+        eye_r = max(3, r / 7)
+        Color(*WHITE)
+        Ellipse(
+            pos=(self.center_x - eye_r, self.center_y - r / 2 - eye_r),
+            size=(eye_r * 2, eye_r * 2),
+        )
+        Color(*BLACK)
+        Ellipse(
+            pos=(self.center_x - eye_r, self.center_y + r / 2 - eye_r),
+            size=(eye_r * 2, eye_r * 2),
+        )
 
-        clock.tick(60)
+        # 金色轮廓
+        Color(*GOLD)
+        Line(circle=(self.center_x, self.center_y, r), width=2)
 
-    pygame.quit()
+    def _poly(self, points):
+        """绘制填充多边形。"""
+        from kivy.graphics import Mesh
+        if len(points) < 3:
+            return
+        vertices = []
+        indices = []
+        for i, (x, y) in enumerate(points):
+            vertices.extend([x, y, 0, 0])
+            indices.append(i)
+        Mesh(
+            vertices=vertices,
+            indices=indices,
+            mode="triangle_fan",
+            texture=None,
+        )
+
+    # ------------------------------------------------------------
+    # 解体
+    # ------------------------------------------------------------
+
+    def _draw_decomposition(self, radius):
+        p = self.decomp_progress
+        if self.decomp_state == DECOMP_EXPAND:
+            progress = 1.0 - (1.0 - p) ** 3
+        else:
+            progress = p ** 3
+
+        r = float(radius)
+
+        # 细线
+        for i in range(100):
+            angle = i * 3.6 + self.rotation_angle
+            inner = r * (0.08 + progress * 0.20)
+            outer = r * (0.55 + progress * 3.4)
+            x1, y1 = self._polar(inner, angle)
+            x2, y2 = self._polar(outer, angle + math.sin(i) * 3)
+            if i % 3 == 0:
+                Color(*ORANGE)
+            elif i % 3 == 1:
+                Color(*BLUE)
+            else:
+                Color(*PURPLE)
+            Line(points=[x1, y1, x2, y2], width=1)
+
+        # 能量环
+        for i in range(16):
+            rr = r * 0.25 + progress * r * (0.25 + i * 0.20)
+            Color(*((140 / 255, 75 / 255, 35 / 255, 1))
+                  if i % 2 == 0 else (40 / 255, 90 / 255, 150 / 255, 1))
+            Line(circle=(self.center_x, self.center_y, max(1, rr)), width=1)
+
+        # 能量球
+        energy_distance = r * 0.18 + progress * r * 1.8
+        ox, oy = self._polar(energy_distance, 145 + self.rotation_angle)
+        Color(*ORANGE)
+        Ellipse(
+            pos=(ox - max(3, r * 0.18 * (1.0 - progress * 0.45)) / 2,
+                 oy - max(3, r * 0.18 * (1.0 - progress * 0.45)) / 2),
+            size=(max(3, r * 0.18 * (1.0 - progress * 0.45)),
+                  max(3, r * 0.18 * (1.0 - progress * 0.45))),
+        )
+        bx, by = self._polar(energy_distance, 325 - self.rotation_angle)
+        Color(*BLUE)
+        Ellipse(
+            pos=(bx - max(3, r * 0.18 * (1.0 - progress * 0.45)) / 2,
+                 by - max(3, r * 0.18 * (1.0 - progress * 0.45)) / 2),
+            size=(max(3, r * 0.18 * (1.0 - progress * 0.45)),
+                  max(3, r * 0.18 * (1.0 - progress * 0.45))),
+        )
+
+        # 粒子
+        for particle in self.decomp_particles:
+            x, y = particle[0], particle[1]
+            size = particle[2]
+            spin = particle[4]
+            color = particle[5]
+
+            base_angle = math.atan2(y, x)
+            distance = math.sqrt(x * x + y * y)
+            final_distance = distance * (1.0 + progress * 3.5)
+            angle = base_angle + spin * progress
+            px = self.center_x + math.cos(angle) * final_distance
+            py = self.center_y + math.sin(angle) * final_distance
+            particle_size = max(1, int(size * (1.0 + progress * 1.6)))
+
+            Color(*color)
+            Ellipse(
+                pos=(px - particle_size, py - particle_size),
+                size=(particle_size * 2, particle_size * 2),
+            )
+
+            if particle_size >= 2:
+                tail_length = particle_size * 5 * (0.5 + progress)
+                tx = px - math.cos(angle) * tail_length
+                ty = py - math.sin(angle) * tail_length
+                Line(points=[tx, ty, px, py], width=1)
+
+        # 中心核心
+        core_radius = r * (0.16 + (1.0 - progress) * 0.18)
+        Color(*ORANGE)
+        Line(circle=(self.center_x, self.center_y, core_radius), width=1)
+        Color(*BLUE)
+        Line(circle=(self.center_x, self.center_y, max(2, core_radius - 7)), width=1)
+        Color(*WHITE)
+        Ellipse(
+            pos=(self.center_x - max(2, 4 + 5 * (1.0 - progress)),
+                 self.center_y - max(2, 4 + 5 * (1.0 - progress))),
+            size=(max(2, 4 + 5 * (1.0 - progress)) * 2,
+                  max(2, 4 + 5 * (1.0 - progress)) * 2),
+        )
+
+    # ------------------------------------------------------------
+    # 中心光环
+    # ------------------------------------------------------------
+
+    def _draw_center_glow(self, radius):
+        if self.decomp_state == DECOMP_IDLE:
+            for i in range(3):
+                r = radius + 8 + i * 8
+                Color(100 / 255, 80 / 255, 35 / 255, 1)
+                Line(circle=(self.center_x, self.center_y, r), width=1)
+            self._draw_taiji_detail_lines(radius)
+        else:
+            p = self.decomp_progress
+            r = radius * (1.0 + p * 2.8)
+            Color(*ORANGE)
+            Line(circle=(self.center_x, self.center_y, r), width=1)
+            Color(*BLUE)
+            Line(circle=(self.center_x, self.center_y, max(1, r - 7)), width=1)
+
+    def _draw_taiji_detail_lines(self, radius):
+        r = float(radius)
+        for i in range(48):
+            angle = i * 7.5 + self.rotation_angle * 0.35
+            inner = r * 0.70
+            outer = r * 1.12
+            p1 = self._polar(inner, angle)
+            p2 = self._polar(outer, angle + 1.5)
+            Color(*((70 / 255, 60 / 255, 35 / 255, 1))
+                  if i % 2 == 0 else (45 / 255, 55 / 255, 65 / 255, 1))
+            Line(points=[p1[0], p1[1], p2[0], p2[1]], width=1)
+
+    # ------------------------------------------------------------
+    # 触屏 / 鼠标输入
+    # ------------------------------------------------------------
+
+    def on_touch_down(self, touch):
+        self._fingers[touch.id] = (touch.x, touch.y)
+
+        # 双指：触发解体动画
+        if len(self._fingers) >= 2:
+            self.start_decomposition()
+            self._last_drag_angle = None
+            return True
+
+        # 单指：若在中心区域则按住加速
+        dist = math.hypot(
+            touch.x - self.center_x,
+            touch.y - self.center_y,
+        )
+        if dist < self._short() * 0.15:
+            self.pressing_center = True
+
+        self._last_drag_angle = math.atan2(
+            touch.y - self.center_y,
+            touch.x - self.center_x,
+        )
+        return True
+
+    def on_touch_move(self, touch):
+        if touch.id not in self._fingers:
+            self._fingers[touch.id] = (touch.x, touch.y)
+
+        self._fingers[touch.id] = (touch.x, touch.y)
+
+        # 双指：以中点为心旋转
+        if len(self._fingers) >= 2:
+            ids = list(self._fingers.keys())
+            p1 = self._fingers[ids[0]]
+            p2 = self._fingers[ids[1]]
+            mx = (p1[0] + p2[0]) / 2
+            my = (p1[1] + p2[1]) / 2
+            new_angle = math.atan2(touch.y - my, touch.x - mx)
+            if self._last_drag_angle is not None:
+                delta = math.degrees(new_angle - self._last_drag_angle)
+                # 归一化到 [-180, 180]
+                delta = (delta + 180) % 360 - 180
+                self.rotation_angle += delta
+            self._last_drag_angle = new_angle
+            return True
+
+        # 单指：绕中心旋转
+        new_angle = math.atan2(
+            touch.y - self.center_y,
+            touch.x - self.center_x,
+        )
+        if self._last_drag_angle is not None:
+            delta = math.degrees(new_angle - self._last_drag_angle)
+            delta = (delta + 180) % 360 - 180
+            self.rotation_angle += delta
+        self._last_drag_angle = new_angle
+        return True
+
+    def on_touch_up(self, touch):
+        if touch.id in self._fingers:
+            del self._fingers[touch.id]
+
+        if not self._fingers:
+            self.pressing_center = False
+            self._last_drag_angle = None
+
+        return True
+
+    # ------------------------------------------------------------
+    # 返回键退出（安卓）
+    # ------------------------------------------------------------
+
+    def handle_back(self):
+        App.get_running_app().stop()
 
 
-# ============================================================
-# 启动
-# ============================================================
+class BaguaApp(App):
+
+    def build(self):
+        self.title = "动态八卦罗盘"
+        widget = BaguaWidget()
+        # 安卓返回键
+        if platform == "android":
+            try:
+                from android.runnable import run_on_ui_thread
+                from jnius import autoclass
+                PythonActivity = autoclass("org.kivy.android.PythonActivity")
+                activity = PythonActivity.mActivity
+
+                @run_on_ui_thread
+                def hook():
+                    activity.onBackPressed = lambda: widget.handle_back()
+
+            except Exception:
+                pass
+        return widget
+
 
 if __name__ == "__main__":
-
-    main()
+    BaguaApp().run()
