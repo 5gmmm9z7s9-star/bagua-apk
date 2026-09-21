@@ -32,9 +32,11 @@ jobs:
           sudo apt update
           sudo apt install -y git zip unzip autoconf libtool pkg-config \
             zlib1g-dev libncurses5-dev libncursesw5-dev cmake libffi-dev \
-            libssl-dev python3-pip
+            libssl-dev python3-pip automake
           pip3 install --user --upgrade buildozer "Cython<0.30"
           echo "$HOME/.local/bin" >> $GITHUB_PATH
+          # 清除旧的buildozer缓存，防止损坏的SDK残留
+          rm -rf $HOME/.buildozer
 
       - name: Build APK
         run: buildozer android debug
