@@ -1,4 +1,4 @@
-name: Build Pygame APK
+name: Build Pygame APK (Native)
 
 on:
   push:
@@ -11,17 +11,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Build with Buildozer
-        uses: ArtemSBulgakov/buildozer-action@v1
-        with:
-          workdir: .
-          buildozer_version: stable
+      - name: Install deps & Buildozer
+        run: |
+          sudo apt update
+          sudo apt install -y git zip unzip autoconf libtool pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev cmake libffi-dev \
+            libssl-dev python3-pip
+          pip3 install --user --upgrade buildozer "Cython<0.30"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Build APK
+        run: |
+          export APP_ANDROID_ACCEPT_SDK_LICENSE=1
+          buildozer android debug
         env:
           BUILDOZER_DISABLE_PPA: "1"
 
